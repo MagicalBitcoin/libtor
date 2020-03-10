@@ -154,32 +154,65 @@ fn log_expand(flag: &TorFlag) -> String {
         .collect::<Vec<String>>()
         .join(" ");
     let dest_str = dest
-        .and_then(|d| Some(format!(" {:?}", d).to_lowercase()))
-        .unwrap_or(String::new());
+        .map(|d| format!(" {:?}", d).to_lowercase())
+        .unwrap_or_default();
 
     format!("Log \"{}{}\"", levels_str, dest_str)
 }
 
-#[derive(Debug, Clone)]
-pub struct DisplayVec<T: std::fmt::Debug + std::fmt::Display> {
-    vec: Vec<T>,
+pub trait Joiner: std::fmt::Debug + std::clone::Clone {
+    fn joiner(&self) -> String;
+    fn new() -> Self;
 }
 
-impl<T: std::fmt::Debug + std::fmt::Display> std::fmt::Display for DisplayVec<T> {
+#[derive(Debug, Clone)]
+pub struct CommaJoiner {}
+impl Joiner for CommaJoiner {
+    fn joiner(&self) -> String {
+        ",".to_string()
+    }
+
+    fn new() -> Self {
+        CommaJoiner {}
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SpaceJoiner {}
+impl Joiner for SpaceJoiner {
+    fn joiner(&self) -> String {
+        " ".to_string()
+    }
+
+    fn new() -> Self {
+        SpaceJoiner {}
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DisplayVec<T: std::fmt::Debug + std::fmt::Display, J: Joiner> {
+    vec: Vec<T>,
+    joiner: J,
+}
+
+impl<T: std::fmt::Debug + std::fmt::Display, J: Joiner> std::fmt::Display for DisplayVec<T, J> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let joined: String = self
             .vec
             .iter()
             .map(|v| format!("{}", v))
             .collect::<Vec<String>>()
-            .join(",");
+            .join(&self.joiner.joiner());
         write!(f, "{}", joined)
     }
 }
 
-impl<T: std::fmt::Debug + std::fmt::Display> From<Vec<T>> for DisplayVec<T> {
-    fn from(vec: Vec<T>) -> DisplayVec<T> {
-        DisplayVec { vec }
+impl<T: std::fmt::Debug + std::fmt::Display, J: Joiner> From<Vec<T>> for DisplayVec<T, J> {
+    fn from(vec: Vec<T>) -> DisplayVec<T, J> {
+        DisplayVec {
+            vec,
+            joiner: J::new(),
+        }
     }
 }
 
@@ -240,15 +273,13 @@ trait OptionVecToString {
 impl<T: std::fmt::Debug> OptionVecToString for Option<Vec<T>> {
     fn option_vec_to_string(&self) -> String {
         self.as_ref()
-            .and_then(|flags| {
-                Some(
-                    flags
-                        .iter()
-                        .map(|f| format!("{:?} ", f))
-                        .collect::<String>(),
-                )
+            .map(|flags| {
+                flags
+                    .iter()
+                    .map(|f| format!("{:?} ", f))
+                    .collect::<String>()
             })
-            .unwrap_or("".to_string())
+            .unwrap_or_default()
     }
 }
 
@@ -299,18 +330,26 @@ pub enum TorFlag {
     #[expand_to("--passphrase-fd {}")]
     PassphraseFD(u32),
 
+    #[expand_to(test = (256, SizeUnit::MBits) => "BandwidthRate \"256 MBits\"")]
     BandwidthRate(usize, SizeUnit),
     BandwidthBurst(usize, SizeUnit),
+    #[expand_to(test = (true.into()) => "DisableNetwork \"1\"")]
     DisableNetwork(TorBool),
 
     ControlPort(u16),
     #[expand_to("ControlPort auto")]
     ControlPortAuto,
     #[expand_to("ControlPort \"{} {}\"")]
-    ControlPortAddress(TorAddress, DisplayOption<DisplayVec<ControlPortFlag>>),
+    #[expand_to(test = (TorAddress::Unix("/tmp/tor-cp".into()), Some(vec![ControlPortFlag::GroupWritable].into()).into()) => "ControlPort \"unix:/tmp/tor-cp GroupWritable\"")]
+    #[expand_to(test = (TorAddress::Unix("/tmp/tor-cp".into()), Some(vec![ControlPortFlag::GroupWritable, ControlPortFlag::RelaxDirModeCheck].into()).into()) => "ControlPort \"unix:/tmp/tor-cp GroupWritable RelaxDirModeCheck\"")]
+    ControlPortAddress(
+        TorAddress,
+        DisplayOption<DisplayVec<ControlPortFlag, SpaceJoiner>>,
+    ),
 
-    // TODO: cfg only on unix
+    #[cfg(target_family = "unix")]
     ControlSocket(String),
+    #[cfg(target_family = "unix")]
     ControlSocketsGroupWritable(TorBool),
 
     HashedControlPassword(String),
@@ -327,6 +366,7 @@ pub enum TorFlag {
 
     HTTPSProxy(String),
     #[expand_to("HTTPSProxyAuthenticator \"{}:{}\"")]
+    #[expand_to(test = ("user".into(), "pass".into()) => "HTTPSProxyAuthenticator \"user:pass\"")]
     HTTPSProxyAuthenticator(String, String),
     Socks4Proxy(String),
     Socks5Proxy(String),
@@ -338,10 +378,13 @@ pub enum TorFlag {
     KeepalivePeriod(usize),
 
     #[expand_to(with = "log_expand")]
+    #[expand_to(test = (LogLevel::Notice) => "Log \"notice\"")]
     Log(LogLevel),
     #[expand_to(with = "log_expand")]
+    #[expand_to(test = (LogLevel::Notice, LogDestination::Stdout) => "Log \"notice stdout\"")]
     LogTo(LogLevel, LogDestination),
     #[expand_to(with = "log_expand")]
+    #[expand_to(test = (vec![(vec![(true, LogDomain::Handshake)], LogLevel::Debug), (vec![(false, LogDomain::Net), (false, LogDomain::Mm)], LogLevel::Info), (vec![], LogLevel::Notice)], LogDestination::Stdout) => "Log \"[handshake]debug [~net,~mm]info notice stdout\"")]
     LogExpanded(Vec<(Vec<(bool, LogDomain)>, LogLevel)>, LogDestination),
     LogMessageDomains(TorBool),
 
@@ -364,15 +407,15 @@ pub enum TorFlag {
     CircuitPadding(TorBool),
     ReducedCircuitPadding(TorBool),
 
-    ExcludeNodes(DisplayVec<String>),
-    ExcludeExitNodes(DisplayVec<String>),
-    ExitNodes(DisplayVec<String>),
-    MiddleNodes(DisplayVec<String>),
-    EntryNodes(DisplayVec<String>),
+    ExcludeNodes(DisplayVec<String, CommaJoiner>),
+    ExcludeExitNodes(DisplayVec<String, CommaJoiner>),
+    ExitNodes(DisplayVec<String, CommaJoiner>),
+    MiddleNodes(DisplayVec<String, CommaJoiner>),
+    EntryNodes(DisplayVec<String, CommaJoiner>),
     StrictNodes(TorBool),
 
     FascistFirewall(TorBool),
-    FirewallPorts(DisplayVec<u16>),
+    FirewallPorts(DisplayVec<u16, CommaJoiner>),
 
     MapAddress(String, String),
     NewCircuitPeriod(usize),
@@ -383,8 +426,8 @@ pub enum TorFlag {
     #[expand_to(rename = "SocksPort")]
     SocksPortAddress(
         TorAddress,
-        DisplayOption<DisplayVec<SocksPortFlag>>,
-        DisplayOption<DisplayVec<SocksPortIsolationFlag>>,
+        DisplayOption<DisplayVec<SocksPortFlag, SpaceJoiner>>,
+        DisplayOption<DisplayVec<SocksPortIsolationFlag, SpaceJoiner>>,
     ),
     SocksTimeout(usize),
     SafeSocks(TorBool),
@@ -397,7 +440,7 @@ pub enum TorFlag {
     HiddenServicePort(TorAddress, DisplayOption<TorAddress>),
     HiddenServiceVersion(HiddenServiceVersion),
     #[expand_to("HiddenServiceAuthorizeClient {:?} {}")]
-    HiddenServiceAuthorizeClient(HiddenServiceAuthType, DisplayVec<String>),
+    HiddenServiceAuthorizeClient(HiddenServiceAuthType, DisplayVec<String, CommaJoiner>),
     HiddenServiceAllowUnknownPorts(TorBool),
     HiddenServiceMaxStreams(usize),
     HiddenServiceMaxStreamsCloseCircuit(TorBool),
@@ -428,18 +471,17 @@ pub enum TorSubcommand {
 }
 
 pub struct Tor {
-    subcommand: Option<TorSubcommand>,
-    flags: Vec<TorFlag>,
+    _subcommand: Option<TorSubcommand>,
+    _flags: Vec<TorFlag>,
 }
 
 #[cfg(test)]
 mod tests {
     use crate::*;
-    use std::net::ToSocketAddrs;
 
     #[test]
+    #[ignore]
     fn it_works() {
-        use std::str::FromStr;
         let a = TorFlag::SocksPortAddress(
             TorAddress::AddressPort("[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:8080".into()),
             Some(vec![SocksPortFlag::NoIPv4Traffic].into()).into(),

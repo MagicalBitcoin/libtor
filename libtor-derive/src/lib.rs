@@ -90,11 +90,12 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
             let mut stream = TokenStream::new();
             let mut test_stream = TokenStream::new();
 
-            'outer: for variant in data.variants {
+            for variant in data.variants {
                 let span = &variant.span();
                 let name = &variant.ident;
                 let mut name_string = name.to_string();
                 let mut test_count = 0;
+                let mut implemented_with = false;
 
                 let mut fmt_attr = None;
 
@@ -105,17 +106,17 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                         continue;
                     }
 
-                    if let Ok(_) = attr.parse_args::<syn::Lit>() {
+                    if attr.parse_args::<syn::Lit>().is_ok() {
                         fmt_attr = Some(attr);
                     } else if let Ok(arg) = attr.parse_args::<ExpandToArg>() {
                         if arg.keyword == "rename" {
                             if let syn::Lit::Str(lit_str) = arg.name {
                                 name_string = lit_str.value();
                             } else {
-                                let tokens = TokenStream::from(quote_spanned! {*span=>
+                                let tokens = quote_spanned! {*span=>
                                     #enum_name::#name{..} => compile_error!("`rename` must be followed by a string literal, eg #[expand_to(rename = \"example\")]"),
-                                });
-                                stream.extend(TokenStream::from(tokens));
+                                };
+                                stream.extend(tokens);
                             }
                         } else if arg.keyword == "with" {
                             let tokens = if let syn::Lit::Str(lit_str) = arg.name {
@@ -142,15 +143,15 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                                 }
                             };
 
-                            stream.extend(TokenStream::from(tokens));
-                            continue 'outer;
+                            stream.extend(tokens);
+                            implemented_with = true;
                         }
                     } else {
                         // TODO: add those example as doc attributes
                         if let Ok(parsed) = attr.parse_args::<TestStruct>() {
                             let test_name =
-                                Ident::new(&format!("TEST_{}_N{}", name, test_count), *span);
-                            let args_group = &parsed.args_group.unwrap_or(TokenStream::new());
+                                Ident::new(&format!("TEST_{}_{}", name, test_count), *span);
+                            let args_group = &parsed.args_group.unwrap_or_default();
                             let expected = &parsed.expected;
 
                             let tokens = quote_spanned! {*span=>
@@ -164,10 +165,14 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                                 }
                             };
 
-                            test_stream.extend(TokenStream::from(tokens));
+                            test_stream.extend(tokens);
                             test_count += 1;
                         }
                     }
+                }
+
+                if implemented_with {
+                    continue;
                 }
 
                 let ignore_filter = |field: &&syn::Field| {
@@ -201,27 +206,24 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                     }
                     (Fields::Unnamed(fields), attr) => {
                         let expand_params = (0..fields.unnamed.len())
-                            .into_iter()
                             .map(|i| Ident::new(&format!("p_{}", i), i.span()));
                         let fmt_params = (0..fields.unnamed.len())
-                            .into_iter()
                             .filter(|i| ignore_filter(&&fields.unnamed[*i]))
                             .map(|i| Ident::new(&format!("p_{}", i), i.span()));
 
-                        if attr.is_none() {
+                        if let Some(attr) = attr {
+                            let args: TokenStream = attr.parse_args().unwrap();
+                            quote_spanned! {*span=>
+                                #enum_name::#name(#(#expand_params, )*) => format!(#args, #(#fmt_params, )*),
+                            }
+                        } else {
                             let fmt_str = (0..fields.unnamed.len())
-                                .into_iter()
                                 .map(|_| "{}")
                                 .collect::<Vec<&str>>()
                                 .join(" ");
                             let fmt_str = format!("{{}} \"{}\"", fmt_str); // {cmdName} + Wrap all the params between quotes
                             quote_spanned! {*span=>
                                 #enum_name::#name(#(#expand_params, )*) => format!(#fmt_str, #name_string, #(#fmt_params, )*),
-                            }
-                        } else {
-                            let args: TokenStream = attr.unwrap().parse_args().unwrap();
-                            quote_spanned! {*span=>
-                                #enum_name::#name(#(#expand_params, )*) => format!(#args, #(#fmt_params, )*),
                             }
                         }
                     }
@@ -236,15 +238,13 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                     }
                 };
 
-                stream.extend(TokenStream::from(tokens));
+                stream.extend(tokens);
             }
 
             (stream, test_stream)
         }
         _ => unimplemented!(),
     };
-    let match_body = TokenStream::from(match_body);
-    let test_funcs = TokenStream::from(test_funcs);
 
     let test_mod_name = Ident::new(
         &format!("_GENERATED_TESTS_FOR_{}", enum_name),
@@ -256,6 +256,7 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
         impl Expand for #name {
             fn expand(&self) -> String {
                 #[allow(unused)]
+                #[allow(clippy::useless_format)]
                 match self {
                     #match_body
                 }
@@ -263,7 +264,10 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
         }
 
         #[cfg(test)]
+        #[allow(non_snake_case)]
         mod #test_mod_name {
+            use super::*;
+
             #test_funcs
         }
     };
