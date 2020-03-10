@@ -5,9 +5,11 @@ rust:
 #  - 1.22.0
 before_script:
   - rustup component add rustfmt
-  - aclocal --version
 script:
   - cargo fmt -- --check --verbose
+  - cd libtor-derive
+  - cargo fmt -- --check --verbose
+  - cd ..
   - cargo test -vv
 
 before_cache:
