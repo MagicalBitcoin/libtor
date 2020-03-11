@@ -2,6 +2,8 @@
 extern crate libtor_derive;
 extern crate tor_sys;
 
+use std::ffi::CString;
+
 pub trait Expand: std::fmt::Debug {
     fn expand(&self) -> String;
 }
@@ -20,7 +22,6 @@ pub enum SizeUnit {
     TBits,
 }
 
-// TODO: make as a macro, DisplayLikeDebug
 macro_rules! display_like_debug {
     ($type:ty) => {
         impl std::fmt::Display for $type {
@@ -32,6 +33,9 @@ macro_rules! display_like_debug {
 }
 
 display_like_debug!(SizeUnit);
+display_like_debug!(ControlPortFlag);
+display_like_debug!(SocksPortFlag);
+display_like_debug!(SocksPortIsolationFlag);
 
 #[derive(Debug, Clone, Copy)]
 pub enum TorBool {
@@ -70,10 +74,6 @@ pub enum ControlPortFlag {
     RelaxDirModeCheck,
 }
 
-display_like_debug!(ControlPortFlag);
-display_like_debug!(SocksPortFlag);
-display_like_debug!(SocksPortIsolationFlag);
-
 #[derive(Debug, Clone, Copy)]
 pub enum LogLevel {
     Debug,
@@ -87,9 +87,11 @@ pub enum LogLevel {
 pub enum LogDestination {
     Stdout,
     Stderr,
-    Syslog, // TODO: only unix
+    #[cfg(target_family = "unix")]
+    Syslog,
     File(String),
-    Android, // TODO: only android
+    #[cfg(target_os = "android")]
+    Android,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -444,9 +446,12 @@ pub enum TorFlag {
     HiddenServiceAllowUnknownPorts(TorBool),
     HiddenServiceMaxStreams(usize),
     HiddenServiceMaxStreamsCloseCircuit(TorBool),
+
+    #[expand_to("{}")]
+    Custom(String),
 }
 
-#[derive(Debug, Expand)]
+#[derive(Debug, Clone, Expand)]
 pub enum TorSubcommand {
     #[expand_to("--hash-password {password}")]
     HashPassword { password: String },
@@ -470,14 +475,124 @@ pub enum TorSubcommand {
     },
 }
 
+#[derive(Debug, Clone)]
+pub enum Error {
+    DuplicatedSubcommand,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct Tor {
-    _subcommand: Option<TorSubcommand>,
-    _flags: Vec<TorFlag>,
+    subcommand: Option<TorSubcommand>,
+    flags: Vec<TorFlag>,
+}
+
+fn split_args(args: &str) -> Vec<&str> {
+    let mut answer = Vec::new();
+    let mut open = false;
+    let mut start = 0;
+    for (i, ch) in args.char_indices() {
+        if ch == '"' {
+            println!("{} flipping open", i);
+            open = !open;
+        } else if ch == ' ' && !open {
+            println!("{} push", i);
+            answer.push(&args[start..i]);
+            start = i + 1;
+        }
+    }
+
+    if start < args.len() {
+        answer.push(&args[start..args.len()]);
+    }
+    println!("{:?}", answer);
+
+    answer
+}
+
+impl Tor {
+    fn new() -> Tor {
+        Default::default()
+    }
+
+    fn new_with_subcommand(subcommand: TorSubcommand) -> Tor {
+        Tor {
+            subcommand: Some(subcommand),
+            ..Default::default()
+        }
+    }
+
+    fn subcommand(&mut self, subcommand: TorSubcommand) -> Result<&mut Tor, Error> {
+        if self.subcommand.is_some() {
+            Err(Error::DuplicatedSubcommand)
+        } else {
+            Ok(self)
+        }
+    }
+
+    fn flag(&mut self, flag: TorFlag) -> &mut Tor {
+        self.flags.push(flag);
+        self
+    }
+
+    // TODO: password from stdin
+    fn start(&self) -> Result<u8, Error> {
+        unsafe {
+            let config = tor_sys::tor_main_configuration_new();
+            let mut argv = vec![String::from("tor")];
+            if let Some(subcommand) = &self.subcommand {
+                argv.push(subcommand.expand());
+            }
+            argv.extend_from_slice(
+                &self
+                    .flags
+                    .iter()
+                    .map(TorFlag::expand)
+                    .map(|s| {
+                        split_args(&s)
+                            .iter()
+                            .map(|i| String::from(*i))
+                            .map(|s| s.replace("\"", ""))
+                            .collect::<Vec<String>>()
+                    })
+                    .flatten()
+                    .collect::<Vec<String>>(),
+            );
+            println!("{:#?}", argv);
+
+            let argv: Vec<_> = argv.into_iter().map(|s| CString::new(s).unwrap()).collect();
+            let argv: Vec<_> = argv.iter().map(|s| s.as_ptr()).collect();
+            tor_sys::tor_main_configuration_set_command_line(
+                config,
+                argv.len() as i32,
+                argv.as_ptr(),
+            );
+
+            let result = tor_sys::tor_run_main(config);
+
+            tor_sys::tor_main_configuration_free(config);
+
+            Ok(result as u8)
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::*;
+
+    #[test]
+    fn test_run() {
+        let tor = Tor::new()
+            .flag(TorFlag::DataDirectory("/tmp/tor-rust".into()))
+            .flag(TorFlag::LogExpanded(
+                vec![
+                    (vec![(true, LogDomain::Handshake)], LogLevel::Info),
+                    (vec![], LogLevel::Notice),
+                ],
+                LogDestination::Stdout,
+            ))
+            .start();
+    }
 
     #[test]
     #[ignore]

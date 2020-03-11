@@ -221,7 +221,8 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                                 .map(|_| "{}")
                                 .collect::<Vec<&str>>()
                                 .join(" ");
-                            let fmt_str = format!("{{}} \"{}\"", fmt_str); // {cmdName} + Wrap all the params between quotes
+                            let quote = if fmt_str.contains(" ") { "\"" } else { "" };
+                            let fmt_str = format!("{{}} {quote}{}{quote}", fmt_str, quote = quote); // {cmdName} + Wrap all the params between quotes if they contain spaces
                             quote_spanned! {*span=>
                                 #enum_name::#name(#(#expand_params, )*) => format!(#fmt_str, #name_string, #(#fmt_params, )*),
                             }
