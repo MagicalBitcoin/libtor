@@ -1,3 +1,18 @@
+//! # Example
+//!
+//! ```no_run
+//! use libtor::{Tor, TorFlag, TorAddress, HiddenServiceVersion};
+//!
+//! Tor::new()
+//!     .flag(TorFlag::DataDirectory("/tmp/tor-rust".into()))
+//!     .flag(TorFlag::SocksPort(19050))
+//!     .flag(TorFlag::HiddenServiceDir("/tmp/tor-rust/hs-dir".into()))
+//!     .flag(TorFlag::HiddenServiceVersion(HiddenServiceVersion::V3))
+//!     .flag(TorFlag::HiddenServicePort(TorAddress::Port(8000), None.into()))
+//!     .start()?;
+//! # Ok::<(), libtor::Error>(())
+//! ```
+
 #[macro_use]
 extern crate libtor_derive;
 extern crate tor_sys;
@@ -15,7 +30,7 @@ pub use crate::log::*;
 pub use crate::ports::*;
 use crate::utils::*;
 
-pub trait Expand: std::fmt::Debug {
+trait Expand: std::fmt::Debug {
     fn expand(&self) -> Vec<String>;
 
     fn expand_cli(&self) -> String {
@@ -291,18 +306,18 @@ pub struct Tor {
 }
 
 impl Tor {
-    fn new() -> Tor {
+    pub fn new() -> Tor {
         Default::default()
     }
 
-    fn new_with_subcommand(subcommand: TorSubcommand) -> Tor {
+    pub fn new_with_subcommand(subcommand: TorSubcommand) -> Tor {
         Tor {
             subcommand: Some(subcommand),
             ..Default::default()
         }
     }
 
-    fn subcommand(&mut self, subcommand: TorSubcommand) -> Result<&mut Tor, Error> {
+    pub fn subcommand(&mut self, subcommand: TorSubcommand) -> Result<&mut Tor, Error> {
         if self.subcommand.is_some() {
             Err(Error::DuplicatedSubcommand)
         } else {
@@ -311,13 +326,13 @@ impl Tor {
         }
     }
 
-    fn flag(&mut self, flag: TorFlag) -> &mut Tor {
+    pub fn flag(&mut self, flag: TorFlag) -> &mut Tor {
         self.flags.push(flag);
         self
     }
 
     // TODO: password from stdin
-    fn start(&self) -> Result<u8, Error> {
+    pub fn start(&self) -> Result<u8, Error> {
         unsafe {
             let config = tor_sys::tor_main_configuration_new();
             let mut argv = vec![String::from("tor")];
