@@ -3,7 +3,7 @@ extern crate proc_macro2;
 extern crate quote;
 extern crate syn;
 
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
@@ -80,6 +80,43 @@ impl Parse for TestStruct {
     }
 }
 
+fn split_first_space_args(val: TokenStream) -> TokenStream {
+    quote! {
+        let formatted = #val;
+        let parts = formatted.splitn(2, " ").collect::<Vec<_>>();
+
+        let mut answer = vec![parts[0].to_string()];
+        if let Some(part) = parts.get(1) {
+            answer.push(part.to_string());
+        }
+
+        answer
+    }
+}
+
+fn generate_test(
+    parsed: TestStruct,
+    test_count: usize,
+    enum_name: &Ident,
+    name: &Ident,
+    span: Span,
+) -> TokenStream {
+    let test_name = Ident::new(&format!("TEST_{}_{}", name, test_count), span);
+    let args_group = &parsed.args_group.unwrap_or_default();
+    let expected = &parsed.expected;
+
+    quote_spanned! {span=>
+        #[test]
+        fn #test_name() {
+            use Expand;
+
+            let v = #enum_name::#name#args_group;
+            println!("{:?} => {}", v, v.expand_cli());
+            assert_eq!(v.expand_cli(), #expected);
+        }
+    }
+}
+
 #[proc_macro_derive(Expand, attributes(expand_to))]
 pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -149,23 +186,8 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                     } else {
                         // TODO: add those example as doc attributes
                         if let Ok(parsed) = attr.parse_args::<TestStruct>() {
-                            let test_name =
-                                Ident::new(&format!("TEST_{}_{}", name, test_count), *span);
-                            let args_group = &parsed.args_group.unwrap_or_default();
-                            let expected = &parsed.expected;
-
-                            let tokens = quote_spanned! {*span=>
-                                #[test]
-                                fn #test_name() {
-                                    use Expand;
-
-                                    let v = #enum_name::#name#args_group;
-                                    println!("{:?} => {}", v, v.expand_cli());
-                                    assert_eq!(v.expand_cli(), #expected);
-                                }
-                            };
-
-                            test_stream.extend(tokens);
+                            test_stream
+                                .extend(generate_test(parsed, test_count, enum_name, name, *span));
                             test_count += 1;
                         }
                     }
@@ -200,18 +222,11 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                             quote_spanned! {f.span()=> #ident }
                         });
 
-                        // TODO: duplicated code down below - abstract this somehow
+                        let fmt_str_quoted = quote! { format!(#args, #(#fmt_params, )*) };
+                        let content = split_first_space_args(fmt_str_quoted);
                         quote_spanned! {attr.span()=>
                             #enum_name::#name{#(#expand_params, )*} => {
-                                let formatted = format!(#args, #(#fmt_params, )*);
-                                let parts = formatted.splitn(2, " ").collect::<Vec<_>>();
-
-                                let mut answer = vec![parts[0].to_string()];
-                                if let Some(part) = parts.get(1) {
-                                    answer.push(part.to_string());
-                                }
-
-                                answer
+                                #content
                             },
                         }
                     }
@@ -224,17 +239,11 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
                         if let Some(attr) = attr {
                             let args: TokenStream = attr.parse_args().unwrap();
+                            let fmt_str_quoted = quote! { format!(#args, #(#fmt_params, )*) };
+                            let content = split_first_space_args(fmt_str_quoted);
                             quote_spanned! {*span=>
                                 #enum_name::#name(#(#expand_params, )*) => {
-                                    let formatted = format!(#args, #(#fmt_params, )*);
-                                    let parts = formatted.splitn(2, " ").collect::<Vec<_>>();
-
-                                    let mut answer = vec![parts[0].to_string()];
-                                    if let Some(part) = parts.get(1) {
-                                        answer.push(part.to_string());
-                                    }
-
-                                    answer
+                                    #content
                                 },
                             }
                         } else {

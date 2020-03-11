@@ -4,13 +4,25 @@ extern crate tor_sys;
 
 use std::ffi::CString;
 
+#[macro_use]
+pub mod utils;
+pub mod hs;
+pub mod log;
+pub mod ports;
+
+pub use crate::hs::*;
+pub use crate::log::*;
+pub use crate::ports::*;
+use crate::utils::*;
+
 pub trait Expand: std::fmt::Debug {
     fn expand(&self) -> Vec<String>;
+
     fn expand_cli(&self) -> String {
         let mut parts = self.expand();
         if parts.len() > 1 {
-            parts.insert(1, "\"".into());
-            parts.push("\"".into());
+            let args = parts.drain(1..).collect::<Vec<_>>().join(" ");
+            parts.push(format!("\"{}\"", args));
         }
 
         parts.join(" ")
@@ -31,20 +43,7 @@ pub enum SizeUnit {
     TBits,
 }
 
-macro_rules! display_like_debug {
-    ($type:ty) => {
-        impl std::fmt::Display for $type {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{:?}", self)
-            }
-        }
-    };
-}
-
 display_like_debug!(SizeUnit);
-display_like_debug!(ControlPortFlag);
-display_like_debug!(SocksPortFlag);
-display_like_debug!(SocksPortIsolationFlag);
 
 #[derive(Debug, Clone, Copy)]
 pub enum TorBool {
@@ -56,11 +55,9 @@ pub enum TorBool {
 
 impl std::fmt::Display for TorBool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use TorBool::*;
-
         let val = match self {
-            True | Enabled => 1,
-            False | Disabled => 0,
+            TorBool::True | TorBool::Enabled => 1,
+            TorBool::False | TorBool::Disabled => 0,
         };
         write!(f, "{}", val)
     }
@@ -74,67 +71,6 @@ impl From<bool> for TorBool {
             TorBool::False
         }
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ControlPortFlag {
-    GroupWritable,
-    WorldWritable,
-    RelaxDirModeCheck,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum LogLevel {
-    Debug,
-    Info,
-    Notice,
-    Warn,
-    Err,
-}
-
-#[derive(Debug, Clone)]
-pub enum LogDestination {
-    Stdout,
-    Stderr,
-    #[cfg(target_family = "unix")]
-    Syslog,
-    File(String),
-    #[cfg(target_os = "android")]
-    Android,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum LogDomain {
-    General,
-    Crypto,
-    Net,
-    Config,
-    Fs,
-    Protocol,
-    Mm,
-    Http,
-    App,
-    Control,
-    Circ,
-    Rend,
-    Bug,
-    Dir,
-    Dirserv,
-    Or,
-    Edge,
-    Acct,
-    Hist,
-    Handshake,
-    Heartbeat,
-    Channel,
-    Sched,
-    Guard,
-    Consdiff,
-    Dos,
-    Process,
-    Pt,
-    Btrack,
-    Mesg,
 }
 
 fn log_expand(flag: &TorFlag) -> Vec<String> {
@@ -171,129 +107,6 @@ fn log_expand(flag: &TorFlag) -> Vec<String> {
     vec!["Log".into(), format!("{}{}", levels_str, dest_str)]
 }
 
-pub trait Joiner: std::fmt::Debug + std::clone::Clone {
-    fn joiner(&self) -> String;
-    fn new() -> Self;
-}
-
-#[derive(Debug, Clone)]
-pub struct CommaJoiner {}
-impl Joiner for CommaJoiner {
-    fn joiner(&self) -> String {
-        ",".to_string()
-    }
-
-    fn new() -> Self {
-        CommaJoiner {}
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SpaceJoiner {}
-impl Joiner for SpaceJoiner {
-    fn joiner(&self) -> String {
-        " ".to_string()
-    }
-
-    fn new() -> Self {
-        SpaceJoiner {}
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct DisplayVec<T: std::fmt::Debug + std::fmt::Display, J: Joiner> {
-    vec: Vec<T>,
-    joiner: J,
-}
-
-impl<T: std::fmt::Debug + std::fmt::Display, J: Joiner> std::fmt::Display for DisplayVec<T, J> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let joined: String = self
-            .vec
-            .iter()
-            .map(|v| format!("{}", v))
-            .collect::<Vec<String>>()
-            .join(&self.joiner.joiner());
-        write!(f, "{}", joined)
-    }
-}
-
-impl<T: std::fmt::Debug + std::fmt::Display, J: Joiner> From<Vec<T>> for DisplayVec<T, J> {
-    fn from(vec: Vec<T>) -> DisplayVec<T, J> {
-        DisplayVec {
-            vec,
-            joiner: J::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct DisplayOption<T: std::fmt::Debug + std::fmt::Display> {
-    option: Option<T>,
-}
-
-impl<T: std::fmt::Debug + std::fmt::Display> std::fmt::Display for DisplayOption<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.option {
-            Some(val) => write!(f, "{}", val),
-            None => Ok(()),
-        }
-    }
-}
-
-impl<T: std::fmt::Debug + std::fmt::Display> From<Option<T>> for DisplayOption<T> {
-    fn from(option: Option<T>) -> DisplayOption<T> {
-        DisplayOption { option }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum SocksPortFlag {
-    NoIPv4Traffic,
-    IPv6Traffic,
-    PreferIPv6,
-    NoDNSRequest,
-    NoOnionTraffic,
-    OnionTrafficOnly,
-    CacheIPv4DNS,
-    CacheIPv6DNS,
-    GroupWritable,
-    WorldWritable,
-    CacheDNS,
-    UseIPv4Cache,
-    UseIPv6Cache,
-    UseDNSCache,
-    PreferIPv6Automap,
-    PreferSOCKSNoAuth,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum SocksPortIsolationFlag {
-    IsolateClientAddr,
-    IsolateSOCKSAuth,
-    IsolateClientProtocol,
-    IsolateDestPort,
-    IsolateDestAddr,
-    KeepAliveIsolateSOCKSAuth,
-}
-
-trait OptionVecToString {
-    fn option_vec_to_string(&self) -> String;
-}
-
-impl<T: std::fmt::Debug> OptionVecToString for Option<Vec<T>> {
-    fn option_vec_to_string(&self) -> String {
-        self.as_ref()
-            .map(|flags| {
-                flags
-                    .iter()
-                    .map(|f| format!("{:?} ", f))
-                    .collect::<String>()
-            })
-            .unwrap_or_default()
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum TorAddress {
     Port(u16),
@@ -315,28 +128,10 @@ impl std::fmt::Display for TorAddress {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum HiddenServiceVersion {
-    V2 = 2,
-    V3 = 3,
-}
-
-impl std::fmt::Display for HiddenServiceVersion {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8)
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum HiddenServiceAuthType {
-    Basic,
-    Stealth,
-}
-
 #[derive(Debug, Clone, Expand)]
 pub enum TorFlag {
     #[expand_to("-f {}")]
-    #[expand_to(test = ("filename".into()) => "-f filename")]
+    #[expand_to(test = ("filename".into()) => "-f \"filename\"")]
     ConfigFile(String),
     #[expand_to("--passphrase-fd {}")]
     PassphraseFD(u32),
@@ -350,7 +145,7 @@ pub enum TorFlag {
     ControlPort(u16),
     #[expand_to("ControlPort auto")]
     ControlPortAuto,
-    #[expand_to("ControlPort \"{} {}\"")]
+    #[expand_to("ControlPort {} {}")]
     #[expand_to(test = (TorAddress::Unix("/tmp/tor-cp".into()), Some(vec![ControlPortFlag::GroupWritable].into()).into()) => "ControlPort \"unix:/tmp/tor-cp GroupWritable\"")]
     #[expand_to(test = (TorAddress::Unix("/tmp/tor-cp".into()), Some(vec![ControlPortFlag::GroupWritable, ControlPortFlag::RelaxDirModeCheck].into()).into()) => "ControlPort \"unix:/tmp/tor-cp GroupWritable RelaxDirModeCheck\"")]
     ControlPortAddress(
@@ -376,7 +171,7 @@ pub enum TorFlag {
     CacheDirectoryGroupReadable(String),
 
     HTTPSProxy(String),
-    #[expand_to("HTTPSProxyAuthenticator \"{}:{}\"")]
+    #[expand_to("HTTPSProxyAuthenticator {}:{}")]
     #[expand_to(test = ("user".into(), "pass".into()) => "HTTPSProxyAuthenticator \"user:pass\"")]
     HTTPSProxyAuthenticator(String, String),
     Socks4Proxy(String),
@@ -565,7 +360,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_run() {
-        let tor = Tor::new()
+        Tor::new()
             .flag(TorFlag::DataDirectory("/tmp/tor-rust".into()))
             .flag(TorFlag::HiddenServiceDir("/tmp/tor-rust/hs-dir".into()))
             .flag(TorFlag::HiddenServiceVersion(HiddenServiceVersion::V3))
@@ -581,6 +376,7 @@ mod tests {
                 ],
                 LogDestination::Stdout,
             ))
-            .start();
+            .start()
+            .unwrap();
     }
 }
