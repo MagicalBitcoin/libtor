@@ -135,7 +135,7 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                                 };
 
                                 quote_spanned! {*span=>
-                                    #matcher => format!("{}", #ident(self)),
+                                    #matcher => #ident(self),
                                 }
                             } else {
                                 quote_spanned! {*span=>
@@ -160,8 +160,8 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                                     use Expand;
 
                                     let v = #enum_name::#name#args_group;
-                                    println!("{:?} => {}", v, v.expand());
-                                    assert_eq!(v.expand(), #expected);
+                                    println!("{:?} => {}", v, v.expand_cli());
+                                    assert_eq!(v.expand_cli(), #expected);
                                 }
                             };
 
@@ -200,8 +200,19 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                             quote_spanned! {f.span()=> #ident }
                         });
 
+                        // TODO: duplicated code down below - abstract this somehow
                         quote_spanned! {attr.span()=>
-                            #enum_name::#name{#(#expand_params,)*} => format!(#args, #(#fmt_params, )*),
+                            #enum_name::#name{#(#expand_params, )*} => {
+                                let formatted = format!(#args, #(#fmt_params, )*);
+                                let parts = formatted.splitn(2, " ").collect::<Vec<_>>();
+
+                                let mut answer = vec![parts[0].to_string()];
+                                if let Some(part) = parts.get(1) {
+                                    answer.push(part.to_string());
+                                }
+
+                                answer
+                            },
                         }
                     }
                     (Fields::Unnamed(fields), attr) => {
@@ -214,27 +225,35 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                         if let Some(attr) = attr {
                             let args: TokenStream = attr.parse_args().unwrap();
                             quote_spanned! {*span=>
-                                #enum_name::#name(#(#expand_params, )*) => format!(#args, #(#fmt_params, )*),
+                                #enum_name::#name(#(#expand_params, )*) => {
+                                    let formatted = format!(#args, #(#fmt_params, )*);
+                                    let parts = formatted.splitn(2, " ").collect::<Vec<_>>();
+
+                                    let mut answer = vec![parts[0].to_string()];
+                                    if let Some(part) = parts.get(1) {
+                                        answer.push(part.to_string());
+                                    }
+
+                                    answer
+                                },
                             }
                         } else {
                             let fmt_str = (0..fields.unnamed.len())
                                 .map(|_| "{}")
                                 .collect::<Vec<&str>>()
                                 .join(" ");
-                            let quote = if fmt_str.contains(" ") { "\"" } else { "" };
-                            let fmt_str = format!("{{}} {quote}{}{quote}", fmt_str, quote = quote); // {cmdName} + Wrap all the params between quotes if they contain spaces
                             quote_spanned! {*span=>
-                                #enum_name::#name(#(#expand_params, )*) => format!(#fmt_str, #name_string, #(#fmt_params, )*),
+                                #enum_name::#name(#(#expand_params, )*) => vec![#name_string.to_string(), format!(#fmt_str, #(#fmt_params, )*)],
                             }
                         }
                     }
                     (Fields::Unit, None) => quote! {
-                        #enum_name::#name => #name_string.to_string(),
+                        #enum_name::#name => vec![#name_string.to_string()],
                     },
                     (Fields::Unit, Some(attr)) => {
                         let args: TokenStream = attr.parse_args().unwrap();
                         quote! {
-                            #enum_name::#name => #args.to_string(),
+                            #enum_name::#name => vec![#args.to_string()],
                         }
                     }
                 };
@@ -255,7 +274,7 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let name = input.ident;
     let expanded = quote! {
         impl Expand for #name {
-            fn expand(&self) -> String {
+            fn expand(&self) -> Vec<String> {
                 #[allow(unused)]
                 #[allow(clippy::useless_format)]
                 match self {

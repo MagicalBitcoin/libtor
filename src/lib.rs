@@ -5,7 +5,16 @@ extern crate tor_sys;
 use std::ffi::CString;
 
 pub trait Expand: std::fmt::Debug {
-    fn expand(&self) -> String;
+    fn expand(&self) -> Vec<String>;
+    fn expand_cli(&self) -> String {
+        let mut parts = self.expand();
+        if parts.len() > 1 {
+            parts.insert(1, "\"".into());
+            parts.push("\"".into());
+        }
+
+        parts.join(" ")
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -128,7 +137,7 @@ pub enum LogDomain {
     Mesg,
 }
 
-fn log_expand(flag: &TorFlag) -> String {
+fn log_expand(flag: &TorFlag) -> Vec<String> {
     let (levels, dest) = match flag {
         TorFlag::Log(level) => (vec![(vec![], *level)], None),
         TorFlag::LogTo(level, dest) => (vec![(vec![], *level)], Some(dest)),
@@ -159,7 +168,7 @@ fn log_expand(flag: &TorFlag) -> String {
         .map(|d| format!(" {:?}", d).to_lowercase())
         .unwrap_or_default();
 
-    format!("Log \"{}{}\"", levels_str, dest_str)
+    vec!["Log".into(), format!("{}{}", levels_str, dest_str)]
 }
 
 pub trait Joiner: std::fmt::Debug + std::clone::Clone {
@@ -486,29 +495,6 @@ pub struct Tor {
     flags: Vec<TorFlag>,
 }
 
-fn split_args(args: &str) -> Vec<&str> {
-    let mut answer = Vec::new();
-    let mut open = false;
-    let mut start = 0;
-    for (i, ch) in args.char_indices() {
-        if ch == '"' {
-            println!("{} flipping open", i);
-            open = !open;
-        } else if ch == ' ' && !open {
-            println!("{} push", i);
-            answer.push(&args[start..i]);
-            start = i + 1;
-        }
-    }
-
-    if start < args.len() {
-        answer.push(&args[start..args.len()]);
-    }
-    println!("{:?}", answer);
-
-    answer
-}
-
 impl Tor {
     fn new() -> Tor {
         Default::default()
@@ -525,6 +511,7 @@ impl Tor {
         if self.subcommand.is_some() {
             Err(Error::DuplicatedSubcommand)
         } else {
+            self.subcommand = Some(subcommand);
             Ok(self)
         }
     }
@@ -539,24 +526,19 @@ impl Tor {
         unsafe {
             let config = tor_sys::tor_main_configuration_new();
             let mut argv = vec![String::from("tor")];
-            if let Some(subcommand) = &self.subcommand {
-                argv.push(subcommand.expand());
-            }
             argv.extend_from_slice(
                 &self
                     .flags
                     .iter()
                     .map(TorFlag::expand)
-                    .map(|s| {
-                        split_args(&s)
-                            .iter()
-                            .map(|i| String::from(*i))
-                            .map(|s| s.replace("\"", ""))
-                            .collect::<Vec<String>>()
-                    })
                     .flatten()
                     .collect::<Vec<String>>(),
             );
+
+            if let Some(subcommand) = &self.subcommand {
+                argv.extend_from_slice(&subcommand.expand());
+            }
+
             println!("{:#?}", argv);
 
             let argv: Vec<_> = argv.into_iter().map(|s| CString::new(s).unwrap()).collect();
@@ -584,6 +566,13 @@ mod tests {
     fn test_run() {
         let tor = Tor::new()
             .flag(TorFlag::DataDirectory("/tmp/tor-rust".into()))
+            .flag(TorFlag::HiddenServiceDir("/tmp/tor-rust/hs-dir".into()))
+            .flag(TorFlag::HiddenServiceVersion(HiddenServiceVersion::V3))
+            .flag(TorFlag::HiddenServicePort(
+                TorAddress::Port(80),
+                Some(TorAddress::AddressPort("example.org:80".into())).into(),
+            ))
+            .flag(TorFlag::SocksPort(0))
             .flag(TorFlag::LogExpanded(
                 vec![
                     (vec![(true, LogDomain::Handshake)], LogLevel::Info),
@@ -592,16 +581,5 @@ mod tests {
                 LogDestination::Stdout,
             ))
             .start();
-    }
-
-    #[test]
-    #[ignore]
-    fn it_works() {
-        let a = TorFlag::SocksPortAddress(
-            TorAddress::AddressPort("[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:8080".into()),
-            Some(vec![SocksPortFlag::NoIPv4Traffic].into()).into(),
-            None.into(),
-        );
-        println!("{}", a.expand());
     }
 }
