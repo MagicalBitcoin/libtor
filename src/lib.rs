@@ -563,6 +563,7 @@ mod tests {
     use crate::*;
 
     #[test]
+    #[ignore]
     fn test_run() {
         let tor = Tor::new()
             .flag(TorFlag::DataDirectory("/tmp/tor-rust".into()))
