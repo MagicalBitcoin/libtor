@@ -1,0 +1,9 @@
+[package]
+name = "libtor"
+version = "42.6.6+0.4.2.6"
+authors = ["Alekos Filini <alekos.filini@gmail.com>"]
+
+[dependencies]
+libtor-sys = "42.6.6"
+#libtor-derive = "0.1"
+libtor-derive = { path = "../libtor-derive" }

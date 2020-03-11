@@ -9,7 +9,7 @@ use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{braced, parenthesized, parse_macro_input, token, Data, DeriveInput, Fields, Token};
 
-#[derive(Debug)]
+// #[derive(Debug)]
 struct ExpandToArg {
     keyword: Ident,
     equal_token: Token![=],
@@ -26,7 +26,7 @@ impl Parse for ExpandToArg {
     }
 }
 
-#[derive(Debug)]
+// #[derive(Debug)]
 struct TestStruct {
     keyword: Ident,
     eq_token: Token![=],

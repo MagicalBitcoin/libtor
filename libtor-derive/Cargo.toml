@@ -2,12 +2,17 @@
 name = "libtor-derive"
 version = "0.1.0"
 authors = ["Alekos Filini <alekos.filini@gmail.com>"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+homepage = "https://github.com/MagicalBitcoin/libtor"
+repository = "https://github.com/MagicalBitcoin/libtor"
+documentation = "https://docs.rs/libtor/"
+description = "Internal #[derive] macros for libtor"
+keywords = ["tor", "daemon"]
+readme = "README.md"
 
 [dependencies]
 proc-macro2 = "1.0"
-syn = { version = "1.0", features = ["extra-traits"] }
+syn = "1.0"
 quote = "1.0"
 
 [lib]
