@@ -1,3 +1,4 @@
+/// Log level
 #[derive(Debug, Clone, Copy)]
 pub enum LogLevel {
     Debug,
@@ -7,6 +8,7 @@ pub enum LogLevel {
     Err,
 }
 
+/// Log destination
 #[derive(Debug, Clone)]
 pub enum LogDestination {
     Stdout,
@@ -18,6 +20,7 @@ pub enum LogDestination {
     Android,
 }
 
+/// Log domain, for fine grained control
 #[derive(Debug, Clone, Copy)]
 pub enum LogDomain {
     General,

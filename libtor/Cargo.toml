@@ -2,8 +2,15 @@
 name = "libtor"
 version = "42.6.6+0.4.2.6"
 authors = ["Alekos Filini <alekos.filini@gmail.com>"]
+license = "MIT"
+homepage = "https://github.com/MagicalBitcoin/libtor"
+repository = "https://github.com/MagicalBitcoin/libtor"
+documentation = "https://docs.rs/libtor/"
+description = "Bundle and run Tor inside your own project"
+keywords = ["tor", "daemon"]
+readme = "README.md"
 
 [dependencies]
 libtor-sys = "42.6.6"
-#libtor-derive = "0.1"
-libtor-derive = { path = "../libtor-derive" }
+libtor-derive = "0.1"
+log = "^0.4"

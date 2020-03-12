@@ -1,3 +1,7 @@
+//! # libtor
+//!
+//! Bundle and run Tor in your own project with this library!
+//!
 //! # Example
 //!
 //! ```no_run
@@ -15,14 +19,22 @@
 
 #[macro_use]
 extern crate libtor_derive;
+extern crate log as log_crate;
 extern crate tor_sys;
 
 use std::ffi::CString;
+use std::thread::{self, JoinHandle};
+
+#[allow(unused_imports)]
+use log_crate::{debug, error, info, trace};
 
 #[macro_use]
-pub mod utils;
+mod utils;
+/// Hidden services related flags
 pub mod hs;
+/// Log related flags
 pub mod log;
+/// ControlPort and SocksPort related flags
 pub mod ports;
 
 pub use crate::hs::*;
@@ -44,6 +56,7 @@ trait Expand: std::fmt::Debug {
     }
 }
 
+/// Enum that represents the size unit both in bytes and bits
 #[derive(Debug, Clone, Copy)]
 pub enum SizeUnit {
     Bytes,
@@ -60,6 +73,7 @@ pub enum SizeUnit {
 
 display_like_debug!(SizeUnit);
 
+/// Enum that represents an enum, rendered as `1` for true and `0` for false
 #[derive(Debug, Clone, Copy)]
 pub enum TorBool {
     True,
@@ -122,11 +136,18 @@ fn log_expand(flag: &TorFlag) -> Vec<String> {
     vec!["Log".into(), format!("{}{}", levels_str, dest_str)]
 }
 
+/// Enum used to represent the generic concept of an "Address"
+///
+/// It can also represent Unix sockets on platforms that support them.
 #[derive(Debug, Clone)]
 pub enum TorAddress {
+    /// Shorthand to only encode the port
     Port(u16),
+    /// Shorthand to only encode the address
     Address(String),
-    AddressPort(String),
+    /// Explicit version that encodes both the address and the port
+    AddressPort(String, u16),
+    /// Path to a Unix socket
     #[cfg(target_family = "unix")]
     Unix(String),
 }
@@ -136,13 +157,18 @@ impl std::fmt::Display for TorAddress {
         match self {
             TorAddress::Port(port) => write!(f, "{}", port),
             TorAddress::Address(addr) => write!(f, "{}", addr),
-            TorAddress::AddressPort(addr) => write!(f, "{}", addr),
+            TorAddress::AddressPort(addr, port) => write!(f, "{}:{}", addr, port),
             #[cfg(target_family = "unix")]
             TorAddress::Unix(path) => write!(f, "unix:{}", path),
         }
     }
 }
 
+/// Enum that represents a subset of the options supported by Tor
+///
+/// Generally speaking, all the server-only features have not been mapped since this crate is
+/// targeted more to a client-like usage. Arbitrary flags can still be added using the
+/// `TorFlag::Custom(String)` variant.
 #[derive(Debug, Clone, Expand)]
 pub enum TorFlag {
     #[expand_to("-f {}")]
@@ -266,72 +292,39 @@ pub enum TorFlag {
     HiddenServiceMaxStreams(usize),
     HiddenServiceMaxStreamsCloseCircuit(TorBool),
 
+    /// Custom argument, expanded as `<first_word> "<second_word> <third_word> ..."`
     #[expand_to("{}")]
     Custom(String),
 }
 
-#[derive(Debug, Clone, Expand)]
-pub enum TorSubcommand {
-    #[expand_to("--hash-password {password}")]
-    HashPassword { password: String },
-    #[expand_to("--verify-config")]
-    VerifyConfig,
-    #[expand_to("--list-fingerprint")]
-    ListFingerprint,
-    #[expand_to("--version")]
-    Version,
-    #[expand_to("--keygen")]
-    Keygen {
-        #[expand_to(ignore)]
-        password: Option<String>,
-    },
-    #[expand_to("--keygen --newpass")]
-    KeygenNewpass {
-        #[expand_to(ignore)]
-        old_password: Option<String>,
-        #[expand_to(ignore)]
-        new_password: Option<String>,
-    },
-}
-
+/// Error enum
 #[derive(Debug, Clone)]
 pub enum Error {
-    DuplicatedSubcommand,
+    NotRunning,
 }
 
+/// Configuration builder for a Tor daemon
+///
+/// Offers the ability to set multiple flags and then start the daemon either in the current
+/// thread, or in a new one
 #[derive(Debug, Clone, Default)]
 pub struct Tor {
-    subcommand: Option<TorSubcommand>,
     flags: Vec<TorFlag>,
 }
 
 impl Tor {
+    /// Create a new instance
     pub fn new() -> Tor {
         Default::default()
     }
 
-    pub fn new_with_subcommand(subcommand: TorSubcommand) -> Tor {
-        Tor {
-            subcommand: Some(subcommand),
-            ..Default::default()
-        }
-    }
-
-    pub fn subcommand(&mut self, subcommand: TorSubcommand) -> Result<&mut Tor, Error> {
-        if self.subcommand.is_some() {
-            Err(Error::DuplicatedSubcommand)
-        } else {
-            self.subcommand = Some(subcommand);
-            Ok(self)
-        }
-    }
-
+    /// Add a configuration flag
     pub fn flag(&mut self, flag: TorFlag) -> &mut Tor {
         self.flags.push(flag);
         self
     }
 
-    // TODO: password from stdin
+    /// Start the Tor daemon in the current thread
     pub fn start(&self) -> Result<u8, Error> {
         unsafe {
             let config = tor_sys::tor_main_configuration_new();
@@ -345,11 +338,7 @@ impl Tor {
                     .collect::<Vec<String>>(),
             );
 
-            if let Some(subcommand) = &self.subcommand {
-                argv.extend_from_slice(&subcommand.expand());
-            }
-
-            println!("{:#?}", argv);
+            debug!("Starting tor with args: {:#?}", argv);
 
             let argv: Vec<_> = argv.into_iter().map(|s| CString::new(s).unwrap()).collect();
             let argv: Vec<_> = argv.iter().map(|s| s.as_ptr()).collect();
@@ -366,6 +355,12 @@ impl Tor {
             Ok(result as u8)
         }
     }
+
+    /// Starts the Tor daemon in a background detached thread and return its handle
+    pub fn start_background(&self) -> JoinHandle<Result<u8, Error>> {
+        let cloned = self.clone();
+        thread::spawn(move || cloned.start())
+    }
 }
 
 #[cfg(test)]
@@ -381,17 +376,11 @@ mod tests {
             .flag(TorFlag::HiddenServiceVersion(HiddenServiceVersion::V3))
             .flag(TorFlag::HiddenServicePort(
                 TorAddress::Port(80),
-                Some(TorAddress::AddressPort("example.org:80".into())).into(),
+                Some(TorAddress::AddressPort("example.org".into(), 80)).into(),
             ))
             .flag(TorFlag::SocksPort(0))
-            .flag(TorFlag::LogExpanded(
-                vec![
-                    (vec![(true, LogDomain::Handshake)], LogLevel::Info),
-                    (vec![], LogLevel::Notice),
-                ],
-                LogDestination::Stdout,
-            ))
-            .start()
-            .unwrap();
+            .start_background();
+
+        std::thread::sleep(std::time::Duration::from_secs(10));
     }
 }

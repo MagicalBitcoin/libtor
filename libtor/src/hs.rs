@@ -1,3 +1,4 @@
+/// Hidden service version
 #[derive(Debug, Clone, Copy)]
 pub enum HiddenServiceVersion {
     V2 = 2,
@@ -10,6 +11,7 @@ impl std::fmt::Display for HiddenServiceVersion {
     }
 }
 
+/// Hidden service authorization type for authorized clients
 #[derive(Debug, Clone, Copy)]
 pub enum HiddenServiceAuthType {
     Basic,

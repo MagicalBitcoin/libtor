@@ -1,9 +1,18 @@
+/// Flags to change the behavior of the control port
+///
+/// Currently, all of the possible flags are only available on Unix systems since they only
+/// apply to the "unix" type of ControlPort
 #[derive(Debug, Clone, Copy)]
 pub enum ControlPortFlag {
+    #[cfg(target_family = "unix")]
     GroupWritable,
+    #[cfg(target_family = "unix")]
     WorldWritable,
+    #[cfg(target_family = "unix")]
     RelaxDirModeCheck,
 }
+
+/// Flags to change the behavior of the socks port
 #[derive(Debug, Clone, Copy)]
 pub enum SocksPortFlag {
     NoIPv4Traffic,
@@ -24,6 +33,7 @@ pub enum SocksPortFlag {
     PreferSOCKSNoAuth,
 }
 
+/// Flags to change the isolation of clients connected to the control port
 #[derive(Debug, Clone, Copy)]
 pub enum SocksPortIsolationFlag {
     IsolateClientAddr,
