@@ -14,3 +14,6 @@ readme = "README.md"
 libtor-sys = "43.6.0"
 libtor-derive = "0.1"
 log = "^0.4"
+
+[features]
+vendored-openssl = ["libtor-sys/vendored-openssl"]
