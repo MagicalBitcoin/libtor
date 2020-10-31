@@ -82,15 +82,17 @@ impl Parse for TestStruct {
 
 fn split_first_space_args(val: TokenStream) -> TokenStream {
     quote! {
-        let formatted = #val;
-        let parts = formatted.splitn(2, " ").collect::<Vec<_>>();
+        {
+            let formatted = #val;
+            let parts = formatted.splitn(2, " ").collect::<Vec<_>>();
 
-        let mut answer = vec![parts[0].to_string()];
-        if let Some(part) = parts.get(1) {
-            answer.push(part.to_string());
+            let mut answer = vec![parts[0].to_string()];
+            if let Some(part) = parts.get(1) {
+                answer.push(part.to_string());
+            }
+
+            answer
         }
-
-        answer
     }
 }
 
@@ -261,8 +263,10 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                     },
                     (Fields::Unit, Some(attr)) => {
                         let args: TokenStream = attr.parse_args().unwrap();
+                        let args_str_quoted = quote! { #args.to_string() };
+                        let content = split_first_space_args(args_str_quoted);
                         quote! {
-                            #enum_name::#name => vec![#args.to_string()],
+                            #enum_name::#name => #content,
                         }
                     }
                 };
