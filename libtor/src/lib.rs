@@ -187,8 +187,8 @@ pub enum TorFlag {
     #[expand_to("ControlPort auto")]
     ControlPortAuto,
     #[expand_to("ControlPort {} {}")]
-    #[expand_to(test = (TorAddress::Unix("/tmp/tor-cp".into()), Some(vec![ControlPortFlag::GroupWritable].into()).into()) => "ControlPort \"unix:/tmp/tor-cp GroupWritable\"")]
-    #[expand_to(test = (TorAddress::Unix("/tmp/tor-cp".into()), Some(vec![ControlPortFlag::GroupWritable, ControlPortFlag::RelaxDirModeCheck].into()).into()) => "ControlPort \"unix:/tmp/tor-cp GroupWritable RelaxDirModeCheck\"")]
+    #[cfg_attr(target_family = "unix", expand_to(test = (TorAddress::Unix("/tmp/tor-cp".into()), Some(vec![ControlPortFlag::GroupWritable].into()).into()) => "ControlPort \"unix:/tmp/tor-cp GroupWritable\""))]
+    #[cfg_attr(target_family = "unix", expand_to(test = (TorAddress::Unix("/tmp/tor-cp".into()), Some(vec![ControlPortFlag::GroupWritable, ControlPortFlag::RelaxDirModeCheck].into()).into()) => "ControlPort \"unix:/tmp/tor-cp GroupWritable RelaxDirModeCheck\""))]
     ControlPortAddress(
         TorAddress,
         DisplayOption<DisplayVec<ControlPortFlag, SpaceJoiner>>,
