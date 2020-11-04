@@ -303,6 +303,16 @@ pub enum Error {
     NotRunning,
 }
 
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::NotRunning => write!(f, "Tor service is not running"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
 /// Configuration builder for a Tor daemon
 ///
 /// Offers the ability to set multiple flags and then start the daemon either in the current
