@@ -12,7 +12,7 @@ readme = "README.md"
 
 [dependencies]
 libtor-sys = "44.5.2"
-libtor-derive = "0.1"
+libtor-derive = "0.1.1"
 log = "^0.4"
 
 [features]
