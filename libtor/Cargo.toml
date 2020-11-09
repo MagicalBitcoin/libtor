@@ -1,6 +1,6 @@
 [package]
 name = "libtor"
-version = "44.5.2+0.4.4.5"
+version = "44.5.3+0.4.4.5"
 authors = ["Alekos Filini <alekos.filini@gmail.com>"]
 license = "MIT"
 homepage = "https://github.com/MagicalBitcoin/libtor"
