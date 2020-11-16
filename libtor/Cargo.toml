@@ -1,6 +1,6 @@
 [package]
 name = "libtor"
-version = "44.5.3+0.4.4.5"
+version = "44.6.0+0.4.4.6"
 authors = ["Alekos Filini <alekos.filini@gmail.com>"]
 license = "MIT"
 homepage = "https://github.com/MagicalBitcoin/libtor"
@@ -11,7 +11,7 @@ keywords = ["tor", "daemon"]
 readme = "README.md"
 
 [dependencies]
-libtor-sys = "44.5.2"
+libtor-sys = "44.6.0"
 libtor-derive = "0.1.1"
 log = "^0.4"
 
@@ -19,3 +19,5 @@ log = "^0.4"
 vendored-openssl = ["libtor-sys/vendored-openssl"]
 vendored-lzma = ["libtor-sys/vendored-lzma"]
 vendored-zstd = ["libtor-sys/vendored-zstd"]
+with-lzma = ["libtor-sys/with-lzma"]
+with-zstd = ["libtor-sys/with-zstd"]
