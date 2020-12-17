@@ -130,7 +130,7 @@ fn log_expand(flag: &TorFlag) -> Vec<String> {
         .collect::<Vec<String>>()
         .join(" ");
     let dest_str = dest
-        .map(|d| format!(" {:?}", d).to_lowercase())
+        .map(|d| format!(" {}", d).to_lowercase())
         .unwrap_or_default();
 
     vec!["Log".into(), format!("{}{}", levels_str, dest_str)]
@@ -228,6 +228,7 @@ pub enum TorFlag {
     #[expand_to(test = (LogLevel::Notice) => "Log \"notice\"")]
     Log(LogLevel),
     #[expand_to(with = "log_expand")]
+    #[expand_to(test = (LogLevel::Notice, LogDestination::File("/dev/null".into())) => "Log \"notice file /dev/null\"")]
     #[expand_to(test = (LogLevel::Notice, LogDestination::Stdout) => "Log \"notice stdout\"")]
     LogTo(LogLevel, LogDestination),
     #[expand_to(with = "log_expand")]

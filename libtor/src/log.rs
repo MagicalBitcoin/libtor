@@ -19,6 +19,14 @@ pub enum LogDestination {
     #[cfg(target_os = "android")]
     Android,
 }
+impl std::fmt::Display for LogDestination {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            LogDestination::File(path) => write!(f, "file {}", path),
+            _ => write!(f, "{:?}", self),
+        }
+    }
+}
 
 /// Log domain, for fine grained control
 #[derive(Debug, Clone, Copy)]
