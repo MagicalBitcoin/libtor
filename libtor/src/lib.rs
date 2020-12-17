@@ -29,7 +29,7 @@ use std::thread::{self, JoinHandle};
 use log_crate::{debug, error, info, trace};
 
 #[macro_use]
-mod utils;
+pub mod utils;
 /// Hidden services related flags
 pub mod hs;
 /// Log related flags
