@@ -296,6 +296,13 @@ pub enum TorFlag {
     /// Custom argument, expanded as `<first_word> "<second_word> <third_word> ..."`
     #[expand_to("{}")]
     Custom(String),
+
+    /// Don't log anything to the console
+    #[expand_to("--quiet")]
+    Quiet(),
+    /// Only log warnings and errors to the console
+    #[expand_to("--hush")]
+    Hush(),
 }
 
 /// Error enum
