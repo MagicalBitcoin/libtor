@@ -1,6 +1,6 @@
 [package]
 name = "libtor"
-version = "44.6.0+0.4.4.6"
+version = "44.6.1+0.4.4.6"
 authors = ["Alekos Filini <alekos.filini@gmail.com>"]
 license = "MIT"
 homepage = "https://github.com/MagicalBitcoin/libtor"
@@ -11,7 +11,7 @@ keywords = ["tor", "daemon"]
 readme = "README.md"
 
 [dependencies]
-libtor-sys = "44.6.0"
+libtor-sys = "44.6"
 libtor-derive = "0.1.1"
 log = "^0.4"
 
