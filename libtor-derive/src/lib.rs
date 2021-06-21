@@ -4,34 +4,30 @@ extern crate quote;
 extern crate syn;
 
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{quote, quote_spanned};
+use quote::{format_ident, quote, quote_spanned};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{braced, parenthesized, parse_macro_input, token, Data, DeriveInput, Fields, Token};
 
-// #[derive(Debug)]
+#[cfg_attr(feature = "debug", derive(Debug))]
 struct ExpandToArg {
     keyword: Ident,
-    equal_token: Token![=],
     name: syn::Lit,
 }
 
 impl Parse for ExpandToArg {
     fn parse(input: ParseStream) -> Result<Self, syn::Error> {
-        Ok(ExpandToArg {
-            keyword: input.parse()?,
-            equal_token: input.parse()?,
-            name: input.parse()?,
-        })
+        let keyword = input.parse()?;
+        input.parse::<Token![=]>()?;
+        let name = input.parse()?;
+
+        Ok(ExpandToArg { keyword, name })
     }
 }
 
-// #[derive(Debug)]
+#[cfg_attr(feature = "debug", derive(Debug))]
 struct TestStruct {
-    keyword: Ident,
-    eq_token: Token![=],
     args_group: Option<TokenStream>,
-    arrow_token: Token![=>],
     expected: syn::LitStr,
 }
 
@@ -41,8 +37,7 @@ impl Parse for TestStruct {
         if keyword != "test" {
             return Err(syn::Error::new(keyword.span(), "expected `test`"));
         }
-
-        let eq_token = input.parse()?;
+        input.parse::<Token![=]>()?;
 
         let args_group: Option<TokenStream> = if input.peek(token::Brace) {
             let content;
@@ -64,14 +59,12 @@ impl Parse for TestStruct {
             None
         };
 
-        let arrow_token = input.parse()?;
+        input.parse::<Token![=>]>()?;
+
         let expected = input.parse()?;
         if let syn::Lit::Str(expected) = expected {
             Ok(TestStruct {
-                keyword,
-                eq_token,
                 args_group,
-                arrow_token,
                 expected,
             })
         } else {
@@ -103,7 +96,7 @@ fn generate_test(
     name: &Ident,
     span: Span,
 ) -> TokenStream {
-    let test_name = Ident::new(&format!("TEST_{}_{}", name, test_count), span);
+    let test_name = format_ident!("TEST_{}_{}", name, test_count);
     let args_group = &parsed.args_group.unwrap_or_default();
     let expected = &parsed.expected;
 
@@ -139,9 +132,7 @@ pub fn derive_helper_attr(input: proc_macro::TokenStream) -> proc_macro::TokenSt
                 let mut fmt_attr = None;
 
                 for attr in &variant.attrs {
-                    if attr.path.get_ident().is_none()
-                        || attr.path.get_ident().unwrap() != "expand_to"
-                    {
+                    if attr.path.get_ident() != Some(&format_ident!("expand_to")) {
                         continue;
                     }
 
