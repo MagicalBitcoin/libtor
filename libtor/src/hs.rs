@@ -1,6 +1,9 @@
 /// Hidden service version
 #[derive(Debug, Clone, Copy)]
 pub enum HiddenServiceVersion {
+    #[deprecated(
+        note = "Please migrate to V3 hidden services",
+    )]
     V2 = 2,
     V3 = 3,
 }
