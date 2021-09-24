@@ -73,7 +73,7 @@ pub enum SizeUnit {
 
 display_like_debug!(SizeUnit);
 
-/// Enum that represents an enum, rendered as `1` for true and `0` for false
+/// Enum that represents a bool, rendered as `1` for true/enabled and `0` for false/disabled
 #[derive(Debug, Clone, Copy)]
 pub enum TorBool {
     True,
