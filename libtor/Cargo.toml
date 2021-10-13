@@ -14,6 +14,7 @@ readme = "README.md"
 libtor-sys = "46.6"
 libtor-derive = "^0.1.2"
 log = "^0.4"
+serde = { version = "1.0.130", features = ["derive"], optional = true }
 
 [features]
 vendored-openssl = ["libtor-sys/vendored-openssl"]

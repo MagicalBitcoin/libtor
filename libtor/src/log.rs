@@ -1,5 +1,9 @@
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Log level
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LogLevel {
     Debug,
     Info,
@@ -10,6 +14,7 @@ pub enum LogLevel {
 
 /// Log destination
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LogDestination {
     Stdout,
     Stderr,
@@ -30,6 +35,7 @@ impl std::fmt::Display for LogDestination {
 
 /// Log domain, for fine grained control
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LogDomain {
     General,
     Crypto,

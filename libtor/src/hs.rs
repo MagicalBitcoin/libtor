@@ -1,9 +1,11 @@
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Hidden service version
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum HiddenServiceVersion {
-    #[deprecated(
-        note = "Please migrate to V3 hidden services",
-    )]
+    #[deprecated(note = "Please migrate to V3 hidden services")]
     V2 = 2,
     V3 = 3,
 }
@@ -16,6 +18,7 @@ impl std::fmt::Display for HiddenServiceVersion {
 
 /// Hidden service authorization type for authorized clients
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum HiddenServiceAuthType {
     Basic,
     Stealth,

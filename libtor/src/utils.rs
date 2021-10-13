@@ -1,3 +1,6 @@
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 macro_rules! display_like_debug {
     ($type:ty) => {
         impl std::fmt::Display for $type {
@@ -14,6 +17,7 @@ pub trait Joiner: std::fmt::Debug + std::clone::Clone {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CommaJoiner {}
 impl Joiner for CommaJoiner {
     fn joiner(&self) -> String {
@@ -26,6 +30,7 @@ impl Joiner for CommaJoiner {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SpaceJoiner {}
 impl Joiner for SpaceJoiner {
     fn joiner(&self) -> String {
@@ -38,6 +43,7 @@ impl Joiner for SpaceJoiner {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DisplayVec<T: std::fmt::Debug + std::fmt::Display, J: Joiner> {
     vec: Vec<T>,
     joiner: J,
@@ -65,6 +71,7 @@ impl<T: std::fmt::Debug + std::fmt::Display, J: Joiner> From<Vec<T>> for Display
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DisplayOption<T: std::fmt::Debug + std::fmt::Display> {
     option: Option<T>,
 }

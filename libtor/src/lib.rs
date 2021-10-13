@@ -22,6 +22,12 @@ extern crate libtor_derive;
 extern crate log as log_crate;
 extern crate tor_sys;
 
+#[cfg(feature = "serde")]
+extern crate serde;
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 use std::ffi::CString;
 use std::thread::{self, JoinHandle};
 
@@ -58,6 +64,7 @@ trait Expand: std::fmt::Debug {
 
 /// Enum that represents the size unit both in bytes and bits
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SizeUnit {
     Bytes,
     KBytes,
@@ -75,6 +82,7 @@ display_like_debug!(SizeUnit);
 
 /// Enum that represents a bool, rendered as `1` for true/enabled and `0` for false/disabled
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TorBool {
     True,
     False,
@@ -140,6 +148,7 @@ fn log_expand(flag: &TorFlag) -> Vec<String> {
 ///
 /// It can also represent Unix sockets on platforms that support them.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TorAddress {
     /// Shorthand to only encode the port
     Port(u16),
@@ -170,6 +179,7 @@ impl std::fmt::Display for TorAddress {
 /// targeted more to a client-like usage. Arbitrary flags can still be added using the
 /// `TorFlag::Custom(String)` variant.
 #[derive(Debug, Clone, Expand)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TorFlag {
     #[expand_to("-f {}")]
     #[expand_to(test = ("filename".into()) => "-f \"filename\"")]
@@ -307,6 +317,7 @@ pub enum TorFlag {
 
 /// Error enum
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Error {
     NotRunning,
 }
@@ -326,6 +337,7 @@ impl std::error::Error for Error {}
 /// Offers the ability to set multiple flags and then start the daemon either in the current
 /// thread, or in a new one
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Tor {
     flags: Vec<TorFlag>,
 }
