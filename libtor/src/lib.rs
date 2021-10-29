@@ -397,7 +397,7 @@ impl Tor {
 }
 
 /// Generate a hashed password to use HashedControlPassword
-pub fn hashed_password_generator(secret: &str) -> String {
+pub fn generate_hashed_password(secret: &str) -> String {
     // This code is rewrite of
     // https://gist.github.com/s4w3d0ff/9d65ec5866d78842547183601b2fa4d5
     // s4w3d0ff and jamesacampbell, Thank you!
