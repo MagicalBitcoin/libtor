@@ -15,6 +15,8 @@ libtor-sys = "46.6"
 libtor-derive = "^0.1.2"
 log = "^0.4"
 serde = { version = "1.0.130", features = ["derive"], optional = true }
+rand = "0.8"
+sha1 = "0.6"
 
 [features]
 vendored-openssl = ["libtor-sys/vendored-openssl"]

@@ -20,6 +20,7 @@
 #[macro_use]
 extern crate libtor_derive;
 extern crate log as log_crate;
+extern crate rand;
 extern crate tor_sys;
 
 #[cfg(feature = "serde")]
@@ -30,6 +31,8 @@ use serde::{Deserialize, Serialize};
 
 use std::ffi::CString;
 use std::thread::{self, JoinHandle};
+
+use rand::Rng;
 
 #[allow(unused_imports)]
 use log_crate::{debug, error, info, trace};
@@ -391,6 +394,38 @@ impl Tor {
         let cloned = self.clone();
         thread::spawn(move || cloned.start())
     }
+}
+
+/// Generate a hashed password to use HashedControlPassword
+pub fn hashed_password_generator(secret: &str) -> String {
+    // This code is rewrite of
+    // https://gist.github.com/s4w3d0ff/9d65ec5866d78842547183601b2fa4d5
+    // s4w3d0ff and jamesacampbell, Thank you!
+    let c: usize = 96;
+
+    let mut salt = rand::rngs::OsRng.gen::<u64>().to_ne_bytes().to_vec();
+    salt.push(c as u8);
+
+    const EXPBIAS: usize = 6;
+    let mut count = (16_usize + (c & 15_usize)) << ((c >> 4_usize) + EXPBIAS);
+    let mut d = sha1::Sha1::new();
+
+    let mut tmp = salt[..8].to_vec();
+    tmp.extend_from_slice(secret.as_bytes());
+
+    let slen = tmp.len();
+    while count != 0 {
+        if count > slen {
+            d.update(&tmp);
+            count -= slen;
+        } else {
+            d.update(&tmp[..count]);
+            count = 0;
+        }
+    }
+    let hashed = d.digest().to_string();
+    let salt = salt.iter().map(|n| format!("{:X}", n)).collect::<String>();
+    format!("16:{}{}", &salt, &hashed)
 }
 
 #[cfg(test)]
