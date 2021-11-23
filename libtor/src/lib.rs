@@ -422,13 +422,13 @@ pub fn generate_hashed_password(secret: &str) -> String {
             break;
         }
     }
-    let hashed = d.digest().to_string().to_uppercase();
+    let hashed = d.digest().to_string();
     let tmp = tmp[..8]
         .iter()
-        .map(|n| format!("{:X}", n))
+        .map(|n| format!("{:x}", n))
         .collect::<String>();
 
-    format!("16:{}{:X}{}", tmp, c as u8, hashed)
+    format!("16:{}{:x}{}", tmp, c as u8, hashed)
 }
 
 #[cfg(test)]
