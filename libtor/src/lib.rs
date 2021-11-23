@@ -21,6 +21,7 @@
 extern crate libtor_derive;
 extern crate log as log_crate;
 extern crate rand;
+extern crate sha1;
 extern crate tor_sys;
 
 #[cfg(feature = "serde")]
@@ -402,10 +403,10 @@ pub fn generate_hashed_password(secret: &str) -> String {
     // https://gist.github.com/s4w3d0ff/9d65ec5866d78842547183601b2fa4d5
     // s4w3d0ff and jamesacampbell, Thank you!
 
-    let slen = 8 + (secret.len());
-    let mut salt = Vec::with_capacity(slen);
-    salt.extend_from_slice(&rand::rngs::OsRng.gen::<u64>().to_ne_bytes());
-    salt.extend_from_slice(secret.as_bytes());
+    let slen = 8 + (secret.as_bytes().len());
+    let mut tmp = Vec::with_capacity(slen);
+    tmp.extend_from_slice(&rand::rngs::OsRng.gen::<u64>().to_ne_bytes());
+    tmp.extend_from_slice(secret.as_bytes());
     let c: usize = 96;
 
     const EXPBIAS: usize = 6;
@@ -414,20 +415,20 @@ pub fn generate_hashed_password(secret: &str) -> String {
 
     while count != 0 {
         if count > slen {
-            d.update(&salt);
+            d.update(&tmp);
             count -= slen;
         } else {
-            d.update(&salt[..count]);
+            d.update(&tmp[..count]);
             break;
         }
     }
     let hashed = d.digest().to_string();
-    let salt = salt[..8]
+    let tmp = tmp[..8]
         .iter()
         .map(|n| format!("{:X}", n))
         .collect::<String>();
 
-    format!("16:{}{:X}{}", salt, c as u8, hashed)
+    format!("16:{}{:X}{}", tmp, c as u8, hashed)
 }
 
 #[cfg(test)]
