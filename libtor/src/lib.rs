@@ -403,15 +403,15 @@ pub fn generate_hashed_password(secret: &str) -> String {
     // https://gist.github.com/s4w3d0ff/9d65ec5866d78842547183601b2fa4d5
     // s4w3d0ff and jamesacampbell, Thank you!
 
+    let c: usize = 96;
+    const EXPBIAS: usize = 6;
+    let mut count = (16_usize + (c & 15_usize)) << ((c >> 4_usize) + EXPBIAS);
+    let mut d = sha1::Sha1::new();
+
     let slen = 8 + (secret.as_bytes().len());
     let mut tmp = Vec::with_capacity(slen);
     tmp.extend_from_slice(&rand::rngs::OsRng.gen::<u64>().to_ne_bytes());
     tmp.extend_from_slice(secret.as_bytes());
-    let c: usize = 96;
-
-    const EXPBIAS: usize = 6;
-    let mut count = (16_usize + (c & 15_usize)) << ((c >> 4_usize) + EXPBIAS);
-    let mut d = sha1::Sha1::new();
 
     while count != 0 {
         if count > slen {
@@ -422,7 +422,7 @@ pub fn generate_hashed_password(secret: &str) -> String {
             break;
         }
     }
-    let hashed = d.digest().to_string();
+    let hashed = d.digest().to_string().to_uppercase();
     let tmp = tmp[..8]
         .iter()
         .map(|n| format!("{:X}", n))
