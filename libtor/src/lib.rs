@@ -425,10 +425,10 @@ pub fn generate_hashed_password(secret: &str) -> String {
     let hashed = d.digest().to_string();
     let tmp = tmp[..8]
         .iter()
-        .map(|n| format!("{:x}", n))
+        .map(|n| format!("{:02x}", n))
         .collect::<String>();
 
-    format!("16:{}{:x}{}", tmp, c as u8, hashed)
+    format!("16:{}{:02x}{}", tmp, c as u8, hashed)
 }
 
 #[cfg(test)]
@@ -450,5 +450,14 @@ mod tests {
             .start_background();
 
         std::thread::sleep(std::time::Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_generate_hashed_password() {
+        for i in 0..0xff {
+            let secret = i.to_string();
+            let hashed_pwd = generate_hashed_password(&secret);
+            assert_eq!(hashed_pwd.len(), 61);
+        }
     }
 }
